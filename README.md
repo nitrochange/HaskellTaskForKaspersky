@@ -1,17 +1,5 @@
-# 🎒📓💻 Task 2
+# Проект для индивидуального отбора на стажировку в лабораторию Касперского
 
-**NOTE: If you just fork this repository it will not be graded. Ask your supervisor for a special GitHub classroom URL.**
+## Общее описание
 
-## How to do the task
-
-Your task is to write a valid definition for every function declared in `src/Task.hs`. All functions have a comment describing what the function needs to do with some examples.
-
-There are predefined tests for you to check your answer. You can look at the tests for some more usage examples in `test/Tests.hs`.
-
-After defining all functions you then need to commit **and push** your code to your repository. An automated script will then check your solution and give you feedback as a CI result in your GitHub repository.
-
-## FAQ
-
-> Can I add extra functions in the `Task.hs` file?
-
-Yes, you can, but you can not remove existing functions.
+Весь исходный код данного проекта содержится в файле `src/Task.hs`. Для сборки проекта использовалась система сборки stack. Соответственно набор тестов прогоняется по команде stack test, выполненной из корневой папки проекта. Тесты находятся в файле `test/Tests.hs`. Проект состоит трёх больших частей и является одной из домашних работ, выполненных нами в рамках университетского курса по Haskell, между частями учебного проекта нет связей. Сами части: List Monoids, Todo List и Coffee. По каждой части написаны более подробные комментарии в исходном коде.
