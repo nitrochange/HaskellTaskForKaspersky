@@ -9,6 +9,7 @@ import Data.List
 import Task
 import Test.Tasty.Hspec
 
+--tests module
 tests :: Spec
 tests = do
   describe "List Monoids" $ do

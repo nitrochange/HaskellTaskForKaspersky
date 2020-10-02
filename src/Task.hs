@@ -91,7 +91,7 @@ data LastMonoid a = LastMonoid {valueL :: Maybe a}
 
 instance Semigroup (LastMonoid a) where
   (LastMonoid b) <> (LastMonoid Nothing) = (LastMonoid b)
-  (LastMonoid b) <> (LastMonoid c) = (LastMonoid c)
+  (LastMonoid _) <> (LastMonoid c) = (LastMonoid c)
 
 
 instance Monoid (LastMonoid a) where
@@ -115,7 +115,6 @@ destructLastMonoid (LastMonoid a) = a
 -- changing the priority of tasks, completing tasks, renaming tasks, and
 -- displaying tasks as a list in order of descending priority.
 
--- TODO: unwrite ORD and write my own comparator
 -- | The priority of a task.
 data Priority = Low | Medium | High
   deriving (Show, Eq, Ord)
@@ -173,24 +172,25 @@ class TaskManager t where
 -- The task manager you are creating.
 data MyTaskManager = MyTaskManager [(Completion, Priority, String)]
 
+-- Support function, used in functions below
 helpdelete :: Maybe a -> a
 helpdelete b
   | not (isNothing b) = fromJust b
+  | otherwise = fromJust b
 
 
--- TODO: You have to make your 'MyTaskManager' an instance of
+
 -- the 'TaskManager' typeclass.
 instance TaskManager MyTaskManager where
 
-
   emptyTaskManager = MyTaskManager []
 
-  getPriorityList (MyTaskManager m) = sortBy (flip compare `on` (\(a,b,c) -> b)) m
+  getPriorityList (MyTaskManager m) = sortBy (flip compare `on` (\(_,b,_) -> b)) m
 
   createTask s pr (MyTaskManager m) = MyTaskManager (m ++ [(NotCompleted, pr, s)])
 
   toggleTaskCompletion s (MyTaskManager m) =
-    let (x,y,z) = (helpdelete (find (\(a,b,c) -> c == s) m)) in
+    let (x,y,z) = (helpdelete (find (\(_,_,c) -> c == s) m)) in
     if not (isNothing (find (\(_,_,c) -> c == s) m))
     then
       if (x == Completed)
@@ -201,7 +201,7 @@ instance TaskManager MyTaskManager where
 
   removeTask s (MyTaskManager m) =
     if not (isNothing (find (\(_,_,c) -> c == s) m))
-    then MyTaskManager (delete (helpdelete (find (\(a,b,c) -> c == s) m)) m)
+    then MyTaskManager (delete (helpdelete (find (\(_,_,c) -> c == s) m)) m)
     else MyTaskManager m
 
   modifyPriority s pr (MyTaskManager m) =
@@ -210,7 +210,7 @@ instance TaskManager MyTaskManager where
     else MyTaskManager m
 
   renameTask s1 s2 (MyTaskManager m) =
-    let (x,y,z) = (helpdelete (find (\(a,b,c) -> c == s1) m)) in
+    let (_,y,_) = (helpdelete (find (\(_,_,c) -> c == s1) m)) in
     if not (isNothing (find (\(_,_,c) -> c == s1) m))
     then createTask s2 y (removeTask s1 (MyTaskManager m))
     else MyTaskManager m
@@ -297,9 +297,9 @@ data DebitCard
 -- If the balance of the debit card after deducing the price of the coffee
 -- would become negative, return 'Nothing' from the function.
 chargeCoffee :: Coffee -> DebitCard -> Maybe DebitCard
-chargeCoffee c@(Coffee cost extra) (DebitCard balance cardId) =
-  if balance - price c < 0 then Nothing
-  else Just (DebitCard (balance - price c) cardId)
+chargeCoffee c@(Coffee _ _) (DebitCard cardBalance cardID) =
+  if cardBalance - price c < 0 then Nothing
+  else Just (DebitCard (cardBalance - price c) cardID)
 
 -- | How was the coffee charged.
 data PaymentMethod
@@ -347,13 +347,12 @@ data Customer
 -- NOTE: The customer can only buy a coffee with strictly one payment method.
 --   (Only one card or cash)
 payForCoffee :: Customer -> Coffee -> Maybe PaymentMethod
-payForCoffee cust@(Customer [] cash) coff@(Coffee pr extras) =
-  if (cash >= toInteger (price coff)) then Just Cash {change = cash -  (toInteger (price coff))}
+payForCoffee (Customer [] amount) coff@(Coffee _ _) =
+  if (amount >= toInteger (price coff)) then Just Cash {change = amount -  (toInteger (price coff))}
   else Nothing
-payForCoffee cust@(Customer cards cash) coff@(Coffee pr extras) =
-  if ((chargeCoffee coff (cards !! 0)) == Nothing) then payForCoffee (Customer (tail cards) cash) coff
-  else Just (Card {chargedCard = fromJust (chargeCoffee coff (cards !! 0))})
-
+payForCoffee (Customer custCards custCash) coff@(Coffee _ _) =
+  if ((chargeCoffee coff (custCards !! 0)) == Nothing) then payForCoffee (Customer (tail custCards) custCash) coff
+  else Just (Card {chargedCard = fromJust (chargeCoffee coff (custCards !! 0))})
 
 
 -- | This function should apply the chosen payment method to the customer.
@@ -367,14 +366,14 @@ payForCoffee cust@(Customer cards cash) coff@(Coffee pr extras) =
 --
 
 replace :: DebitCard->[DebitCard]->Maybe [DebitCard]
-replace (DebitCard balance cardId) cards =
-  if (find (\(DebitCard b c) -> c == cardId) cards) == Nothing then Nothing
-  else Just (map (\(DebitCard b c) -> if c == cardId then (DebitCard balance c) else (DebitCard b c)) cards)
+replace (DebitCard balanceCard cardIds) debitCards =
+  if (find (\(DebitCard _ c) -> c == cardIds) debitCards) == Nothing then Nothing
+  else Just (map (\(DebitCard b c) -> if c == cardIds then (DebitCard balanceCard c) else (DebitCard b c)) debitCards)
 
 applyPayment :: Customer -> PaymentMethod -> Customer
-applyPayment c@(Customer cards cash) p@(Cash money) = (Customer cards money)
-applyPayment c@(Customer cards cash) p@(Card dbtcrd) =
-  if (replace dbtcrd cards /= Nothing) then (Customer (fromJust (replace dbtcrd cards)) cash)
+applyPayment (Customer dcards _) (Cash money) = (Customer dcards money)
+applyPayment c@(Customer debitCards money) (Card dbtcrd) =
+  if (replace dbtcrd debitCards /= Nothing) then (Customer (fromJust (replace dbtcrd debitCards)) money)
   else c
 
 
@@ -382,7 +381,7 @@ applyPayment c@(Customer cards cash) p@(Card dbtcrd) =
 -- | Performs the full payment (as in 'payForCoffee') and
 -- returns the modified customer (as in 'applyPayment').
 buyCoffee :: Customer -> Coffee -> Maybe Customer
-buyCoffee c@(Customer cards cash) coff@(Coffee price extras) =
+buyCoffee c@(Customer _ _) coff@(Coffee _ _) =
   if (payForCoffee c coff) /= Nothing then Just (applyPayment c (fromJust (payForCoffee c coff)))
   else Nothing
 
@@ -397,19 +396,17 @@ buyCoffee c@(Customer cards cash) coff@(Coffee price extras) =
 -- much the total sugar would have cost.
 
 
--- цена сахара для 1 кофе
---страшная функция, мне не нравится(
---но она работает
+-- count sugar price for 1 coffee
 countRUBAmount :: Coffee -> Int
-countRUBAmount (Coffee price []) = 0
-countRUBAmount c@(Coffee price extras) = case extras !! 0 of
-  BrownSugar ->  35 + countRUBAmount (Coffee price (tail extras))
-  WhiteSugar ->  15 + countRUBAmount (Coffee price (tail extras))
-  Cream -> countRUBAmount (Coffee price (tail extras))
-  AlmondMilk -> countRUBAmount (Coffee price (tail extras))
-  SoyMilk -> countRUBAmount (Coffee price (tail extras))
-  OatMilk -> countRUBAmount (Coffee price (tail extras))
-  Cinnamon -> countRUBAmount (Coffee price (tail extras))
+countRUBAmount (Coffee _ []) = 0
+countRUBAmount (Coffee pricing components) = case components !! 0 of
+  BrownSugar ->  35 + countRUBAmount (Coffee pricing (tail components))
+  WhiteSugar ->  15 + countRUBAmount (Coffee pricing (tail components))
+  Cream -> countRUBAmount (Coffee pricing (tail components))
+  AlmondMilk -> countRUBAmount (Coffee pricing (tail components))
+  SoyMilk -> countRUBAmount (Coffee pricing (tail components))
+  OatMilk -> countRUBAmount (Coffee pricing (tail components))
+  Cinnamon -> countRUBAmount (Coffee pricing (tail components))
 
 countListRUBAmount :: [Coffee] -> Int
 countListRUBAmount [] = 0
@@ -417,7 +414,7 @@ countListRUBAmount coffes = (countRUBAmount (coffes !! 0)) + (countListRUBAmount
 
 --fixed 1 cup of Coffee by deleting sugar in extras
 littleFixCoffee :: Coffee -> Coffee
-littleFixCoffee (Coffee price extras) = Coffee price [x| x <- extras, x/= BrownSugar, x/= WhiteSugar ]
+littleFixCoffee (Coffee rate ingredients) = Coffee rate [x| x <- ingredients, x/= BrownSugar, x/= WhiteSugar ]
 
 -- just map func for lst of Coffees
 bigFixCoffee :: [Coffee] -> [Coffee]
@@ -433,21 +430,21 @@ saveTheDiabetic coffees = (toInteger (countListRUBAmount coffees), bigFixCoffee 
 -- The only ingredient that elevates the danger level is, of course, sugar:
 --
 
-
---   WhiteSugar: 2 extra danger points
---   BrownSugar: 1 extra danger point
+-- Function calculating danger for 1 cup of Coffee
+-- WhiteSugar: 2 extra danger points
+-- BrownSugar: 1 extra danger point
 calcDangerFor1Coffee :: Coffee -> Int
 calcDangerFor1Coffee (Coffee _ []) = 0
-calcDangerFor1Coffee c@(Coffee price extras) = case extras !! 0 of
-  BrownSugar ->  1 + calcDangerFor1Coffee (Coffee price (tail extras))
-  WhiteSugar ->  2 + calcDangerFor1Coffee (Coffee price (tail extras))
-  Cream -> calcDangerFor1Coffee (Coffee price (tail extras))
-  AlmondMilk -> calcDangerFor1Coffee (Coffee price (tail extras))
-  SoyMilk -> calcDangerFor1Coffee (Coffee price (tail extras))
-  OatMilk -> calcDangerFor1Coffee (Coffee price (tail extras))
-  Cinnamon -> calcDangerFor1Coffee (Coffee price (tail extras))
+calcDangerFor1Coffee (Coffee coffeePrice extraS) = case extraS !! 0 of
+  BrownSugar ->  1 + calcDangerFor1Coffee (Coffee coffeePrice (tail extraS))
+  WhiteSugar ->  2 + calcDangerFor1Coffee (Coffee coffeePrice (tail extraS))
+  Cream -> calcDangerFor1Coffee (Coffee coffeePrice (tail extraS))
+  AlmondMilk -> calcDangerFor1Coffee (Coffee coffeePrice (tail extraS))
+  SoyMilk -> calcDangerFor1Coffee (Coffee coffeePrice (tail extraS))
+  OatMilk -> calcDangerFor1Coffee (Coffee coffeePrice (tail extraS))
+  Cinnamon -> calcDangerFor1Coffee (Coffee coffeePrice (tail extraS))
 
-
+-- Function calculating danger for list of Coffee
 calculateSugarDanger :: [Coffee] -> Int
 calculateSugarDanger [] = 0
 calculateSugarDanger coffes = (calcDangerFor1Coffee (coffes !! 0)) + calculateSugarDanger (tail coffes)
